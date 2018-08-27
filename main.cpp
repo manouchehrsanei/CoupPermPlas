@@ -11,6 +11,11 @@
 #include "TPZCPPDarcyMat.h"
 
 
+#include "pzskylstrmatrix.h"
+#include "pzstepsolver.h"
+
+
+using namespace std;
 
 //------------------Model------------------------
 
@@ -29,17 +34,19 @@ int      bc3        = -4;  // define id for a material (cont contour upper)
 const int dirichlet = 0;
 const int neumann   = 1;
 
+int postProcessResolution = 0; // Define post processing resolution
 
-// Create geometry
+
+// @brief Function to create the geometric mesh
 TPZGeoMesh *CreateGMesh(int64_t nel, int uNDiv, int vNDiv);
 
-// Create Computational mesh
+// @brief Function to create  the computational mesh
 TPZCompMesh *CMesh(TPZGeoMesh *gmesh, int pOrder);
 
-using namespace std;
 
 
-// Main of program
+
+// Main function of the program:
 int main(int argc, char *argv[])
 {
 
@@ -49,25 +56,52 @@ int main(int argc, char *argv[])
     TPZCompMesh *cmesh = CMesh(gmesh, pOrder); // Function to create polynomial mesh
 
     // Solving the System
-    bool optimizeBandwidth = true;
+    int numthreads = 0;
+    bool optimizeBandwidth = false;
     TPZAnalysis analysis(cmesh, optimizeBandwidth); // Creates object of analysis that manage the analysis of  problem
-    analysis.Run(); // Assembles the global stiffness matrix (and the load vector) and inverts the system of equations
     
-    TPZFMatrix<STATE> solution = cmesh->Solution(); // Taking the solution vector
-    solution.Print("Solution",cout,EMathematicaInput); // Print the solution in Mathematica format
     
-    // Post processing for paraview
+    TPZSkylineStructMatrix struct_mat(cmesh);
+    struct_mat.SetNumThreads(numthreads);
+    TPZStepSolver<STATE> step;
+    step.SetDirect(ELDLt);
+    analysis.SetSolver(step);
+    analysis.SetStructuralMatrix(struct_mat);
+
+    
+    std::cout << "Assemble matrix with NDoF = " << cmesh->NEquations() << std::endl;
+    analysis.Assemble(); // Assembla the global matrix
+    
+#ifdef PZDEBUG
+    std::ofstream filestiff("stiffness.txt");
+    analysis.Solver().Matrix()->Print("K = ",filestiff,EMathematicaInput);
+    
+    std::ofstream filerhs("rhs.txt");
+    analysis.Rhs().Print("R = ",filerhs,EMathematicaInput);
+#endif
+
+    std::cout << "Solving Matrix " << std::endl;
+    analysis.Solve();
+    
+#ifdef PZDEBUG
+        std::ofstream file("file.txt");
+        analysis.Solution().Print("sol=",file,EMathematicaInput);
+#endif
+    
+//    analysis.Run(); // Assembles the global stiffness matrix (and the load vector) and inverts the system of equations
+//    TPZFMatrix<STATE> solution = cmesh->Solution(); // Taking the solution vector
+//    solution.Print("Solution",cout,EMathematicaInput); // Print the solution in Mathematica format
+    
+    // Post processing for paraview   
     std::cout << " Post Processing " << std::endl;
-    string plotfile = "DarcyModel.vtk"; // Output file
-    TPZStack<string> scalnames, vecnames;
-    scalnames.Push("p"); //set to print u
-    vecnames.Push("v");
+    std::string plotfile("DarcyModel.vtk");
+    TPZStack<std::string> scalnames, vecnames;
+    scalnames.Push("p");
     scalnames.Push("k");
+    vecnames.Push("v");
     
-    
-    int dim = gmesh->Dimension();
+//    int dim = gmesh->Dimension();
     analysis.DefineGraphMesh(dim, scalnames, vecnames, plotfile); // Define graphic mesh
-    int postProcessResolution = 4; // Define post processing resolution
     analysis.PostProcess(postProcessResolution); // Perform post processing
     
     std::cout << "FINISHED!" << std::endl;

@@ -6,6 +6,7 @@
 //
 //
 
+
 #include "TPZCPPDarcyMat.h"
 #include <iostream>
 #include <string>
@@ -14,6 +15,7 @@
 #include <algorithm>
 #include "pzlog.h"
 #include "pzfmatrix.h"
+#include <stdio.h>
 #include "TPZMaterial.h"
 
 
@@ -33,7 +35,7 @@ TPZCPPDarcyMat::TPZCPPDarcyMat(): TPZMaterial()
 }
 
 /** @brief costructor based on a material id */
-TPZCPPDarcyMat::TPZCPPDarcyMat(int matid): TPZMaterial(matid)
+TPZCPPDarcyMat::TPZCPPDarcyMat(int id): TPZMaterial(id)
 {
     m_Dim = 2;
     m_k_0 = 1.0;
@@ -41,11 +43,11 @@ TPZCPPDarcyMat::TPZCPPDarcyMat(int matid): TPZMaterial(matid)
 }
 
 /** @brief copy constructor $ */
-TPZCPPDarcyMat::TPZCPPDarcyMat(const TPZCPPDarcyMat& other): TPZMaterial(other)
+TPZCPPDarcyMat::TPZCPPDarcyMat(const TPZCPPDarcyMat& other)
 {
-    this->m_Dim               = other.m_Dim;
-    this->m_k_0               = other.m_k_0;
-    this->m_eta               = other.m_eta;
+    m_Dim  = other.m_Dim;
+    m_k_0  = other.m_k_0;
+    m_eta  = other.m_eta;
 }
 
 
@@ -65,6 +67,12 @@ TPZCPPDarcyMat& TPZCPPDarcyMat::operator = (const TPZCPPDarcyMat& other)
     return *this;
 }
 
+/** @brief number of state variables */
+int TPZCPPDarcyMat::NStateVariables()
+{
+    return 1;
+}
+
 
 /** @brief of compute permeability (Kappa) */
 void TPZCPPDarcyMat::Compute_Kappa(TPZMaterialData &data, REAL &kappa)
@@ -72,6 +80,10 @@ void TPZCPPDarcyMat::Compute_Kappa(TPZMaterialData &data, REAL &kappa)
     kappa = m_k_0;
 }
 
+void TPZCPPDarcyMat::Contribute(TPZMaterialData &data, REAL weight, TPZFMatrix<STATE> &ek, TPZFMatrix<STATE> &ef)
+{
+    return;
+}
 
 /** @brief of contribute in 2 dimensional */
 void TPZCPPDarcyMat::Contribute(TPZVec<TPZMaterialData> &datavec, REAL weight, TPZFMatrix<STATE>  &ek, TPZFMatrix<STATE> &ef)
@@ -133,6 +145,10 @@ void TPZCPPDarcyMat::Contribute(TPZVec<TPZMaterialData> &datavec, REAL weight, T
     }
 }
 
+void TPZCPPDarcyMat::ContributeBC(TPZMaterialData &data, REAL weight, TPZFMatrix<STATE> &ek, TPZFMatrix<STATE> &ef, TPZBndCond &bc)
+{
+    return;
+}
 
 /** @brief of contribute of BC_2D */
 void TPZCPPDarcyMat::ContributeBC(TPZVec<TPZMaterialData> &datavec, REAL weight, TPZFMatrix<STATE> &ek,TPZFMatrix<STATE> &ef,TPZBndCond &bc)
@@ -237,8 +253,8 @@ int TPZCPPDarcyMat::VariableIndex(const std::string &name)
 {
     //	Diffusion Variables
     if(!strcmp("p",name.c_str()))				return	0;
-    if(!strcmp("v",name.c_str()))				return	1;
-    if(!strcmp("k",name.c_str()))				return	2;
+    if(!strcmp("k",name.c_str()))				return	1;
+    if(!strcmp("v",name.c_str()))				return	2;
     
     return TPZMaterial::VariableIndex(name);
 }
@@ -248,8 +264,8 @@ int TPZCPPDarcyMat::VariableIndex(const std::string &name)
 int TPZCPPDarcyMat::NSolutionVariables(int var)
 {
     if(var == 0)	return 1;
-    if(var == 1)	return m_Dim;
-    if(var == 2)	return 1;
+    if(var == 1)	return 1;
+    if(var == 2)	return m_Dim;
 
     return TPZMaterial::NSolutionVariables(var);
 }
@@ -287,8 +303,18 @@ void TPZCPPDarcyMat::Solution(TPZVec<TPZMaterialData> &datavec, int var, TPZVec<
         return;
     }
     
-    //	Darcy's velocity
+    //	Permeability
     if(var == 1)
+    {
+        REAL k = 0.0;
+        Compute_Kappa(datavec[p_b], k);
+        Solout[0] = k*to_Darcy;
+        return;
+    }
+    
+    
+    //	Darcy's velocity
+    if(var == 2)
     {
         Grad_p(0,0) = dp(0,0)*axes_p(0,0)+dp(1,0)*axes_p(1,0); // dp/dx
         Grad_p(1,0) = dp(0,0)*axes_p(0,1)+dp(1,0)*axes_p(1,1); // dp/dy
@@ -302,15 +328,12 @@ void TPZCPPDarcyMat::Solution(TPZVec<TPZMaterialData> &datavec, int var, TPZVec<
     }
     
     
-    //	Permeability
-    if(var == 2)
-    {
-        REAL k = 0.0;
-        Compute_Kappa(datavec[p_b], k);
-        Solout[0] = k*to_Darcy;
-        return;
-    }
-    
+}
+
+/** @brief Unique identifier for serialization purposes */
+int TPZCPPDarcyMat::ClassId() const
+{
+    return Hash("TPZCPPDarcyMat") ^ TPZMaterial::ClassId() << 1;
 }
 
 

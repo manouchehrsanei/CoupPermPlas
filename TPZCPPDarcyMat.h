@@ -39,7 +39,7 @@ public:
     TPZCPPDarcyMat();
     
     // @brief a Constructor
-    TPZCPPDarcyMat(int matid);
+    TPZCPPDarcyMat(int id);
     
     // @brief a Destructor
     ~TPZCPPDarcyMat();
@@ -55,6 +55,8 @@ public:
     
     std::string Name() { return "TPZCPPDarcyMat"; }
     
+    virtual int NStateVariables();
+    
     /** @brief compute permeability (Kappa) */
     virtual void Compute_Kappa(TPZMaterialData &data, REAL &kappa);
     
@@ -62,8 +64,14 @@ public:
     
     void FillBoundaryConditionDataRequirement(int type,TPZVec<TPZMaterialData > &datavec);
     
+    virtual void Contribute(TPZMaterialData &data, REAL weight, TPZFMatrix<STATE> &ek, TPZFMatrix<STATE> &ef);
+    
     /** @brief It computes a contribution to the stiffness matrix and load vector at one integration point to simulation. */
     void Contribute(TPZVec<TPZMaterialData> &datavec, REAL weight, TPZFMatrix<STATE> &ek, TPZFMatrix<STATE> &ef);
+    
+    
+    virtual void ContributeBC(TPZMaterialData &data, REAL weight, TPZFMatrix<STATE> &ek, TPZFMatrix<STATE> &ef, TPZBndCond &bc);
+    
     
     void ContributeBC(TPZVec<TPZMaterialData> &datavec, REAL weight, TPZFMatrix<STATE> &ek,TPZFMatrix<STATE> &ef,TPZBndCond &bc);
     
@@ -71,13 +79,32 @@ public:
     
     int NSolutionVariables(int var);
     
-    void Solution(TPZVec<TPZMaterialData> &datavec, int var, TPZVec<STATE> &Solout);
+    virtual void Solution(TPZVec<TPZMaterialData> &datavec, int var, TPZVec<STATE> &Solout);
 
+    /** @{
+     * @name Save and Load methods
+     */
+    
+    /** @brief Unique identifier for serialization purposes */
+public:
+    virtual int ClassId() const;
+    
     // Save the element data to a stream
     virtual void Write(TPZStream &buf, int withclassid) const;
     
     // Read the element data from a stream
-    void Read(TPZStream &buf, void *context);
+    virtual void Read(TPZStream &buf, void *context);
+    
+public:
+    
+    /** @brief dimension of the model: */
+    void SetDimension(int dimension)
+    {
+        m_Dim = dimension;
+    }
+    
+    int Dimension() const {return m_Dim;}
+
     
 };
 
