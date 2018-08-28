@@ -55,7 +55,8 @@ public:
     
     std::string Name() { return "TPZCPPDarcyMat"; }
     
-    virtual int NStateVariables();
+    /** @brief Returns the number of state variables associated with the material */
+    int NStateVariables() {return 1;}
     
     /** @brief compute permeability (Kappa) */
     virtual void Compute_Kappa(TPZMaterialData &data, REAL &kappa);
@@ -64,16 +65,19 @@ public:
     
     void FillBoundaryConditionDataRequirement(int type,TPZVec<TPZMaterialData > &datavec);
     
-    virtual void Contribute(TPZMaterialData &data, REAL weight, TPZFMatrix<STATE> &ek, TPZFMatrix<STATE> &ef);
-    
     /** @brief It computes a contribution to the stiffness matrix and load vector at one integration point to simulation. */
     void Contribute(TPZVec<TPZMaterialData> &datavec, REAL weight, TPZFMatrix<STATE> &ek, TPZFMatrix<STATE> &ef);
     
-    
-    virtual void ContributeBC(TPZMaterialData &data, REAL weight, TPZFMatrix<STATE> &ek, TPZFMatrix<STATE> &ef, TPZBndCond &bc);
-    
+    virtual void Contribute(TPZMaterialData &data, REAL weight, TPZFMatrix<STATE> &ek, TPZFMatrix<STATE> &ef){
+        DebugStop();
+    }
     
     void ContributeBC(TPZVec<TPZMaterialData> &datavec, REAL weight, TPZFMatrix<STATE> &ek,TPZFMatrix<STATE> &ef,TPZBndCond &bc);
+    
+    void ContributeBC(TPZMaterialData &data, REAL weight, TPZFMatrix<STATE> &ek, TPZFMatrix<STATE> &ef, TPZBndCond &bc){
+        DebugStop();
+    }
+    
     
     int VariableIndex(const std::string &name);
     

@@ -8,37 +8,51 @@
 #include "TPZVTKGeoMesh.h"
 #include "pzanalysis.h"
 #include "pzbndcond.h"
+
+
 #include "TPZCPPDarcyMat.h"
+#include "TPZCPPDarcyWithMem.h"
 
 
 #include "pzskylstrmatrix.h"
 #include "pzstepsolver.h"
+#include <pzgeoel.h>
+#include "pzgeoelbc.h"
 
 
 using namespace std;
 
-//------------------Model------------------------
+//---------------------------------Model-------------------------------------
 
-const int dim       = 2; // Dimension of the problem
-int      uNDiv      = 3;
-int      vNDiv      = 4;
-int      nel        = uNDiv*vNDiv; // Number of element
-int     pOrder      = 4; //Polynomial order
+// Define Geometry
+const int dim        =  2;
+int      pOrder      =  2;
+int     h_level      =  8;
+double    lx         =  1.0;
+double    ly         =  1.0;
+int      nelx        =  h_level;
+int      nely        =  h_level;
+int       nx         =  nelx + 1;
+int       ny         =  nely + 1;
 
-int     matid       = 1;   // Define id for a material (weak formulation)
-int      bc0        = -1;  // define id for a material (cont contour left)
-int      bc1        = -2;  // define id for a material (cont contour right)
-int      bc2        = -3;  // define id for a material (cont contour bottom)
-int      bc3        = -4;  // define id for a material (cont contour upper)
+// Define id for a material (weak formulation)
+int     matid        =  1;
+int m_matBCbott      = -1;
+int m_matBCtop       = -2;
+int m_matBCleft      = -3;
+int m_matBCright     = -4;
+int m_matPoint       = -5;
 
-const int dirichlet = 0;
-const int neumann   = 1;
+// Define Boundary condition
+const int dirichlet  =  0;
+//const int neumann    =  1;
 
-int postProcessResolution = 0; // Define post processing resolution
+// Define post processing resolution
+int postProcessResolution = 0;
 
 
 // @brief Function to create the geometric mesh
-TPZGeoMesh *CreateGMesh(int64_t nel, int uNDiv, int vNDiv);
+TPZGeoMesh *CreateGMesh(int nelx, int nely, double hx, double hy);
 
 // @brief Function to create  the computational mesh
 TPZCompMesh *CMesh(TPZGeoMesh *gmesh, int pOrder);
@@ -49,16 +63,15 @@ TPZCompMesh *CMesh(TPZGeoMesh *gmesh, int pOrder);
 // Main function of the program:
 int main(int argc, char *argv[])
 {
-
     
-    TPZGeoMesh *gmesh = CreateGMesh(nel, uNDiv, vNDiv); // Function to create geometry
+    TPZGeoMesh *gmesh = CreateGMesh(nx, ny, lx, ly); // Function to create geometry
     
     TPZCompMesh *cmesh = CMesh(gmesh, pOrder); // Function to create polynomial mesh
 
     // Solving the System
     int numthreads = 0;
     bool optimizeBandwidth = false;
-    TPZAnalysis analysis(cmesh, optimizeBandwidth); // Creates object of analysis that manage the analysis of  problem
+    TPZAnalysis analysis(cmesh, optimizeBandwidth); // Creates object of analysis
     
     
     TPZSkylineStructMatrix struct_mat(cmesh);
@@ -75,9 +88,6 @@ int main(int argc, char *argv[])
 #ifdef PZDEBUG
     std::ofstream filestiff("stiffness.txt");
     analysis.Solver().Matrix()->Print("K = ",filestiff,EMathematicaInput);
-    
-    std::ofstream filerhs("rhs.txt");
-    analysis.Rhs().Print("R = ",filerhs,EMathematicaInput);
 #endif
 
     std::cout << "Solving Matrix " << std::endl;
@@ -87,10 +97,7 @@ int main(int argc, char *argv[])
         std::ofstream file("file.txt");
         analysis.Solution().Print("sol=",file,EMathematicaInput);
 #endif
-    
-//    analysis.Run(); // Assembles the global stiffness matrix (and the load vector) and inverts the system of equations
-//    TPZFMatrix<STATE> solution = cmesh->Solution(); // Taking the solution vector
-//    solution.Print("Solution",cout,EMathematicaInput); // Print the solution in Mathematica format
+
     
     // Post processing for paraview   
     std::cout << " Post Processing " << std::endl;
@@ -98,11 +105,11 @@ int main(int argc, char *argv[])
     TPZStack<std::string> scalnames, vecnames;
     scalnames.Push("p");
     scalnames.Push("k");
-    vecnames.Push("v");
+//    scalnames.Push("vx");
+//    scalnames.Push("vy");
     
-//    int dim = gmesh->Dimension();
     analysis.DefineGraphMesh(dim, scalnames, vecnames, plotfile); // Define graphic mesh
-    analysis.PostProcess(postProcessResolution); // Perform post processing
+    analysis.PostProcess(postProcessResolution,dim); // Perform post processing
     
     std::cout << "FINISHED!" << std::endl;
     
@@ -111,77 +118,162 @@ int main(int argc, char *argv[])
 
 
 // Create geometry
-TPZGeoMesh *CreateGMesh(int64_t nel, int uNDiv, int vNDiv)
+TPZGeoMesh *CreateGMesh(int nx, int ny, double lx, double ly)
 {
-    TPZGeoMesh * gmesh = new TPZGeoMesh; // Initialize object of class TPZGeoMesh
     
-    int64_t nnodes = (uNDiv+1)*(vNDiv+1); // number of nodes
-    gmesh->NodeVec().Resize(nnodes); // Resize the size of the vector of the geometric mesh
-
+    int64_t id, index;
+    int dim = 2;
     
-    // Putting us in the loop
-    for (int64_t i = 0 ; i < nnodes; i++) 
+    TPZGeoMesh *gmesh = new TPZGeoMesh();
+    gmesh->SetDimension(dim);
+    
+    TPZVec <REAL> coord (3,0.);
+    
+    // Initialization of nodes:
+    for(int i = 0; i < ny; i++)
     {
-        TPZManVector <REAL,3> coord(3,0.);
-        coord[0]=8*((float)(i/(uNDiv+1))/vNDiv)+((float)(i%(uNDiv+1))/uNDiv)*16-8;
-        coord[0]/=2;
-        coord[1]=coord[0]+8-((float)(i%(uNDiv+1))/uNDiv)*16;
-        gmesh->NodeVec()[i].SetCoord(coord); // Set coordinate in the vector of node
-        gmesh->NodeVec()[i].SetNodeId(i);    // Assign ID to one node
+        for(int j = 0; j < nx; j++)
+        {
+            id = i*nx + j;
+            coord[0] = (j)*lx/(nx - 1);
+            coord[1] = (i)*ly/(ny - 1);
+            coord[2] = 0.;
+            //Get the index of the node
+            index = gmesh->NodeVec().AllocateNewElement();
+            //Set the value of the node in the mesh nodes vector
+            gmesh->NodeVec()[index] = TPZGeoNode(id,coord,*gmesh);
+        }
     }
     
-    // Creating Elements
-    TPZManVector<int64_t,4> topolQuad(4,0.); // Vector that will be initialized with the index of the nodes of a quadrilateral element
-    TPZManVector <int64_t,4> topolLine(2,0.); // Vector that will be initialized with the index of the nodes of a one-dimensional element
-    TPZVec <int64_t> TopolPoint(1); // vector that will be initialized with the index of the no of a zero-dimensional element
-    int64_t id; // id of the element that will be filled by the CreateGeoElement method
-    int64_t column, row;
+    // Point 1
+    TPZVec<int64_t> pointtopology(1);
+    pointtopology[0] = 0;
     
-    for (int64_t iel = 0; iel < nel; iel++) 
+    gmesh->CreateGeoElement(EPoint,pointtopology,m_matPoint,id);
+    
+    
+    // Auxiliary vector to store the connections between elements:
+    TPZVec <int64_t> connect(4,0);
+    
+    // Connectivity of elements:
+    for(int i = 0; i < (ny - 1); i++)
     {
-        column=iel%(uNDiv);
-        row=iel/(uNDiv);
-        topolQuad[0]=(row)*(uNDiv+1)+column;    // Lower left vertex
-        topolQuad[1]=(row)*(uNDiv+1)+column+1;  // Lower right vertex
-        topolQuad[2]=(row+1)*(uNDiv+1)+column+1;// Upper right vertex
-        topolQuad[3]=(row+1)*(uNDiv+1)+column;  // Upper left vertex
+        for(int j = 0; j < (nx - 1); j++)
+        {
+            index      = (i)*(nx - 1)+ (j);
+            connect[0] = (i)*ny + (j);
+            connect[1] = connect[0]+1;
+            connect[2] = connect[1]+(nx);
+            connect[3] = connect[0]+(nx);
+            gmesh->CreateGeoElement(EQuadrilateral,connect,matid,id);
+        }
+    }
+    
+    
+    // Generating neighborhood information:
+    gmesh->BuildConnectivity();
+    
+    {
+        TPZCheckGeom check(gmesh);
+        check.CheckUniqueId();
+    }
+    
+    int64_t el, numelements = gmesh->NElements();
+    TPZManVector <int64_t> TopolPlate(4);
+    
+    for (el=0; el<numelements; el++)
+    {
+        int64_t totalnodes = gmesh->ElementVec()[el]->NNodes();
+        TPZGeoEl *plate = gmesh->ElementVec()[el];
+        for (int i=0; i<4; i++)
+        {
+            TopolPlate[i] = plate->NodeIndex(i);
+        }
         
-        //column==0 <=> left side
-        // Cond Left contour
-        if(column==0)
+        // The boundary conditions:
+        TPZManVector <TPZGeoNode> Nodefinder(totalnodes);
+        TPZManVector <REAL,3> nodecoord(3);
+        
+        // In face x = 1
+        TPZVec<int64_t> ncoordzbottVec(0);
+        TPZVec<int64_t> ncoordztopVec(0);
+        TPZVec<int64_t> ncoordzleftVec(0);
+        TPZVec<int64_t> ncoordzrightVec(0);
+        
+        int64_t sizeOfbottVec = 0;
+        int64_t sizeOftopVec = 0;
+        int64_t sizeOfleftVec = 0;
+        int64_t sizeOfrightVec = 0;
+        
+        for (int64_t i = 0; i < totalnodes; i++)
         {
-            topolLine[0] = topolQuad[0];
-            topolLine[1] = topolQuad[3];
-            gmesh->CreateGeoElement(EOned, topolLine, bc0, id);
+            Nodefinder[i] = gmesh->NodeVec()[TopolPlate[i]];
+            Nodefinder[i].GetCoordinates(nodecoord);
+            if (nodecoord[2] == 0. & nodecoord[1] == 0.)
+            {
+                sizeOfbottVec++;
+                ncoordzbottVec.Resize(sizeOfbottVec);
+                ncoordzbottVec[sizeOfbottVec-1] = TopolPlate[i];
+            }
+            if (nodecoord[2] == 0. & nodecoord[1] == ly)
+            {
+                sizeOftopVec++;
+                ncoordztopVec.Resize(sizeOftopVec);
+                ncoordztopVec[sizeOftopVec-1] = TopolPlate[i];
+            }
+            if (nodecoord[2] == 0. & nodecoord[0] == 0.)
+            {
+                sizeOfleftVec++;
+                ncoordzleftVec.Resize(sizeOfleftVec);
+                ncoordzleftVec[sizeOfleftVec-1] = TopolPlate[i];
+            }
+            if (nodecoord[2] == 0. & nodecoord[0] == lx)
+            {
+                sizeOfrightVec++;
+                ncoordzrightVec.Resize(sizeOfrightVec);
+                ncoordzrightVec[sizeOfrightVec-1] = TopolPlate[i];
+            }
         }
-        //column==uNDiv-1 <==> right side
-        // Cond Right contour
-        if(column==uNDiv-1)
+        
+        if (sizeOfbottVec == 2)
         {
-            topolLine[0] = topolQuad[1];
-            topolLine[1] = topolQuad[2];
-            gmesh->CreateGeoElement(EOned, topolLine, bc1, id);
+            int sidesbott = plate->WhichSide(ncoordzbottVec);
+            TPZGeoElSide platesidebott(plate, sidesbott);
+            TPZGeoElBC(platesidebott,m_matBCbott);
         }
-        //row==0<==>lower plate(V=0)
-        // Cond Bottom contour
-        if(row==0)
+        
+        if (sizeOftopVec == 2)
         {
-            topolLine[0] = topolQuad[0];
-            topolLine[1] = topolQuad[1];
-            gmesh->CreateGeoElement(EOned, topolLine, bc2, id);
+            int sidestop = plate->WhichSide(ncoordztopVec);
+            TPZGeoElSide platesidetop(plate, sidestop);
+            TPZGeoElBC(platesidetop,m_matBCtop);
         }
-        //row==vNDiv-1 <==> upper plate (V=1)
-        // Cond Upper Contour
-        if(row==vNDiv-1)
+        
+        if (sizeOfleftVec == 2)
         {
-            topolLine[0] = topolQuad[2];
-            topolLine[1] = topolQuad[3];
-            gmesh->CreateGeoElement(EOned, topolLine, bc3, id);
+            int sidesleft = plate->WhichSide(ncoordzleftVec);
+            TPZGeoElSide platesideleft(plate, sidesleft);
+            TPZGeoElBC(platesideleft,m_matBCleft);
         }
-        gmesh->CreateGeoElement(EQuadrilateral, topolQuad, matid, id);// Creates quadrilateral element
-        gmesh->ElementVec()[id];
+        
+        if (sizeOfrightVec == 2)
+        {
+            int sidesright = plate->WhichSide(ncoordzrightVec);
+            TPZGeoElSide platesideright(plate, sidesright);
+            TPZGeoElBC(platesideright,m_matBCright);
+        }
+        
+        ncoordzbottVec.Resize(0);
+        sizeOfbottVec = 0;
+        ncoordztopVec.Resize(0);
+        sizeOftopVec = 0;
+        ncoordzleftVec.Resize(0);
+        sizeOfleftVec = 0;
+        ncoordzrightVec.Resize(0);
+        sizeOfrightVec = 0;
+        
     }
-    gmesh->BuildConnectivity(); // Builds mesh neighbor connectivity
+    
     
 #ifdef PZDEBUG
     std::ofstream out("geomesh.vtk"), outtxt("gmesh.txt");
@@ -202,9 +294,22 @@ TPZCompMesh *CMesh(TPZGeoMesh *gmesh, int pOrder)
     cmesh->SetDimModel(dim); // Set the dimension of the model
     cmesh->SetAllCreateFunctionsContinuous(); // Create approximation H1 space
 
+    /** @{
+     * @brief of creating material that implements the weak formulation of the model problem
+     */
     
-    // Creating material that implements the weak formulation of the model problem
-    TPZCPPDarcyMat * material = new TPZCPPDarcyMat(matid);
+    // *************** Begin of checking the type of material ******************************************************
+    // *************** TPZCPPDarcyMat ******************************************************************************
+    
+    
+//    TPZCPPDarcyMat * material = new TPZCPPDarcyMat(matid);
+    
+    // *************** TPZCPPDarcyWithMem **************************************************************************
+
+    TPZCPPDarcyWithMem * material = new TPZCPPDarcyWithMem(matid, dim);
+    
+    // *************** End of checking the type of material ********************************************************
+
     
     // Inserting material into the mesh
     cmesh->InsertMaterialObject(material);
@@ -213,23 +318,19 @@ TPZCompMesh *CMesh(TPZGeoMesh *gmesh, int pOrder)
     TPZFMatrix<STATE> val1(2,2,0.), val2(2,1,0.);
     
     val2(0,0) = 0.0;
-    val2(1,0) = 0.0;
-    TPZMaterial * BCond0 = material->CreateBC(material, bc0, neumann, val1, val2); // Creates material that implements the left contour condition
+    TPZMaterial * BCond0 = material->CreateBC(material, m_matBCbott, dirichlet, val1, val2); //Creates material that implements the bottom contour condition
     cmesh->InsertMaterialObject(BCond0); // Insert material into the mesh
     
-    val2(0,0) = 0.0;
-    val2(1,0) = 0.0;
-    TPZMaterial * BCond1 = material->CreateBC(material, bc1, neumann, val1, val2); // Creates material that implements the right contour condition
+    val2(0,0) = 10.0;
+    TPZMaterial * BCond1 = material->CreateBC(material, m_matBCtop, dirichlet, val1, val2);//creates material that implements the top contour condition
     cmesh->InsertMaterialObject(BCond1); // Insert material into the mesh
     
     val2(0,0) = 0.0;
-    val2(1,0) = 0.0;
-    TPZMaterial * BCond2 = material->CreateBC(material, bc2, dirichlet, val1, val2); //Creates material that implements the bottom contour condition
+    TPZMaterial * BCond2 = material->CreateBC(material, m_matBCleft, dirichlet, val1, val2); // Creates material that implements the left contour condition
     cmesh->InsertMaterialObject(BCond2); // Insert material into the mesh
     
     val2(0,0) = 0.0;
-    val2(1,0) = 1.0;
-    TPZMaterial * BCond3 = material->CreateBC(material, bc3, dirichlet, val1, val2);//creates material that implements the top contour condition
+    TPZMaterial * BCond3 = material->CreateBC(material, m_matBCright, dirichlet, val1, val2); // Creates material that implements the right contour condition
     cmesh->InsertMaterialObject(BCond3); // Insert material into the mesh
     
     //  Creates computational elements that will manage the approach space of the mesh

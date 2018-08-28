@@ -1,5 +1,5 @@
 //
-//  TPZCPPDarcyMat.cpp
+//  TPZCPPDarcyWithMem.cpp
 //  PZ
 //
 //  Created by Manouchehr on Agust 24, 2018.
@@ -7,7 +7,7 @@
 //
 
 
-#include "TPZCPPDarcyMat.h"
+#include "TPZCPPDarcyWithMem.h"
 #include <iostream>
 #include <string>
 #include "pzbndcond.h"
@@ -21,13 +21,13 @@
 
 
 #ifdef LOG4CXX
-static LoggerPtr logger(Logger::getLogger("pz.TPZCPPDarcyMat"));
+static LoggerPtr logger(Logger::getLogger("pz.TPZCPPDarcyWithMem"));
 #endif
 
 
 
 /** @brief default costructor */
-TPZCPPDarcyMat::TPZCPPDarcyMat(): TPZMaterial()
+TPZCPPDarcyWithMem::TPZCPPDarcyWithMem(): TPZMatWithMem<TPZCPPDarcyMem, TPZDiscontinuousGalerkin>()
 {
     m_Dim = 0;
     m_k_0 = 0;
@@ -35,15 +35,15 @@ TPZCPPDarcyMat::TPZCPPDarcyMat(): TPZMaterial()
 }
 
 /** @brief costructor based on a material id */
-TPZCPPDarcyMat::TPZCPPDarcyMat(int id): TPZMaterial(id)
+TPZCPPDarcyWithMem::TPZCPPDarcyWithMem(int matid, int dim): TPZMatWithMem<TPZCPPDarcyMem, TPZDiscontinuousGalerkin>(matid)
 {
-    m_Dim = 2;
+    m_Dim = dim;
     m_k_0 = 1.0;
     m_eta = 1.0;
 }
 
 /** @brief copy constructor $ */
-TPZCPPDarcyMat::TPZCPPDarcyMat(const TPZCPPDarcyMat& other)
+TPZCPPDarcyWithMem::TPZCPPDarcyWithMem(const TPZCPPDarcyWithMem& other): TPZMatWithMem<TPZCPPDarcyMem, TPZDiscontinuousGalerkin>(other)
 {
     m_Dim  = other.m_Dim;
     m_k_0  = other.m_k_0;
@@ -52,13 +52,13 @@ TPZCPPDarcyMat::TPZCPPDarcyMat(const TPZCPPDarcyMat& other)
 
 
 /** @brief default destructor */
-TPZCPPDarcyMat::~TPZCPPDarcyMat()
+TPZCPPDarcyWithMem::~TPZCPPDarcyWithMem()
 {
 }
 
 
 /** @brief Copy assignemnt operator $ */
-TPZCPPDarcyMat& TPZCPPDarcyMat::operator = (const TPZCPPDarcyMat& other)
+TPZCPPDarcyWithMem& TPZCPPDarcyWithMem::operator = (const TPZCPPDarcyWithMem& other)
 {
     if (this != & other) // prevent self-assignment
     {
@@ -69,14 +69,18 @@ TPZCPPDarcyMat& TPZCPPDarcyMat::operator = (const TPZCPPDarcyMat& other)
 
 
 /** @brief of compute permeability (Kappa) */
-void TPZCPPDarcyMat::Compute_Kappa(TPZMaterialData &data, REAL &kappa)
-{
-    kappa = m_k_0;
+void TPZCPPDarcyWithMem::Compute_Kappa(TPZMaterialData &data, TPZFNMatrix<9,STATE> &k)
+{  
+    // @brief of function to compute permeability
+    long global_point_index = data.intGlobPtIndex;
+    TPZCPPDarcyMem &memory = GetMemory()[global_point_index];
+    
+    k = memory.kappa_n();
 }
 
 
 /** @brief of contribute in 2 dimensional */
-void TPZCPPDarcyMat::Contribute(TPZVec<TPZMaterialData> &datavec, REAL weight, TPZFMatrix<STATE>  &ek, TPZFMatrix<STATE> &ef)
+void TPZCPPDarcyWithMem::Contribute(TPZVec<TPZMaterialData> &datavec, REAL weight, TPZFMatrix<STATE>  &ek, TPZFMatrix<STATE> &ef)
 {
     int p_b = 0;
     m_k_0 = 1.0;
@@ -98,10 +102,10 @@ void TPZCPPDarcyMat::Contribute(TPZVec<TPZMaterialData> &datavec, REAL weight, T
     int nphi_p = phip.Rows();
     
     // Compute permeability
-    REAL k = 0.0;
+    TPZFNMatrix<9,REAL> k(3,3,0.0);
     Compute_Kappa(datavec[p_b], k);
     
-    REAL c = (k/m_eta);
+    REAL c = (k[0]/m_eta);
 
     // Darcy mono-phascis flow
     for (int ip = 0; ip < nphi_p; ip++)
@@ -137,7 +141,7 @@ void TPZCPPDarcyMat::Contribute(TPZVec<TPZMaterialData> &datavec, REAL weight, T
 
 
 /** @brief of contribute of BC_2D */
-void TPZCPPDarcyMat::ContributeBC(TPZVec<TPZMaterialData> &datavec, REAL weight, TPZFMatrix<STATE> &ek,TPZFMatrix<STATE> &ef,TPZBndCond &bc)
+void TPZCPPDarcyWithMem::ContributeBC(TPZVec<TPZMaterialData> &datavec, REAL weight, TPZFMatrix<STATE> &ek,TPZFMatrix<STATE> &ef,TPZBndCond &bc)
 {
     int p_b = 0;
 
@@ -200,7 +204,7 @@ void TPZCPPDarcyMat::ContributeBC(TPZVec<TPZMaterialData> &datavec, REAL weight,
 
 
 /** Returns the Fill Data Requirement */
-void TPZCPPDarcyMat::FillDataRequirements(TPZVec<TPZMaterialData> &datavec)
+void TPZCPPDarcyWithMem::FillDataRequirements(TPZVec<TPZMaterialData> &datavec)
 
 {
     int nref = datavec.size();
@@ -213,7 +217,7 @@ void TPZCPPDarcyMat::FillDataRequirements(TPZVec<TPZMaterialData> &datavec)
 
 
 /** Returns the Fill Boundary Condition Data Requirement */
-void TPZCPPDarcyMat::FillBoundaryConditionDataRequirement(int type,TPZVec<TPZMaterialData> &datavec)
+void TPZCPPDarcyWithMem::FillBoundaryConditionDataRequirement(int type,TPZVec<TPZMaterialData> &datavec)
 {
     int nref = datavec.size();
     for(int i = 0; i<nref; i++)
@@ -225,17 +229,17 @@ void TPZCPPDarcyMat::FillBoundaryConditionDataRequirement(int type,TPZVec<TPZMat
 
 
 /** Returns the print */
-void TPZCPPDarcyMat::Print(std::ostream &out)
+void TPZCPPDarcyWithMem::Print(std::ostream &out)
 {
     out << "Material Name : "               << Name()  << "\n";
-    out << "Properties for TPZCPPDarcyMat: \n";
+    out << "Properties for TPZCPPDarcyWithMem: \n";
     TPZMaterial::Print(out);
     out << "\n";
 }
 
 
 /** Returns the variable index associated with the name */
-int TPZCPPDarcyMat::VariableIndex(const std::string &name)
+int TPZCPPDarcyWithMem::VariableIndex(const std::string &name)
 {
     //	Diffusion Variables
     if(!strcmp("p",name.c_str()))				return	0;
@@ -248,7 +252,7 @@ int TPZCPPDarcyMat::VariableIndex(const std::string &name)
 
 
 /** Returns the number of solution variables */
-int TPZCPPDarcyMat::NSolutionVariables(int var)
+int TPZCPPDarcyWithMem::NSolutionVariables(int var)
 {
     if(var == 0)	return 1;
     if(var == 1)	return 1;
@@ -260,7 +264,7 @@ int TPZCPPDarcyMat::NSolutionVariables(int var)
 
 
 //	Calculate Secondary variables based on ux, uy, Pore pressure and their derivatives
-void TPZCPPDarcyMat::Solution(TPZVec<TPZMaterialData> &datavec, int var, TPZVec<STATE> &Solout)
+void TPZCPPDarcyWithMem::Solution(TPZVec<TPZMaterialData> &datavec, int var, TPZVec<STATE> &Solout)
 {
     Solout.Resize( this->NSolutionVariables(var));
     
@@ -297,9 +301,11 @@ void TPZCPPDarcyMat::Solution(TPZVec<TPZMaterialData> &datavec, int var, TPZVec<
     //	Permeability
     if(var == 1)
     {
-        REAL k = 0.0;
+        // Compute permeability
+        TPZFNMatrix<9,REAL> k(3,3,0.0);
         Compute_Kappa(datavec[p_b], k);
-        Solout[0] = k*to_Darcy;
+        
+        Solout[0] = k[0]*to_Darcy;
         return;
     }
     
@@ -308,41 +314,46 @@ void TPZCPPDarcyMat::Solution(TPZVec<TPZMaterialData> &datavec, int var, TPZVec<
 //    if(var == 2)
 //    {
 //        
-//        REAL k = 0.0;
+//        // Compute permeability
+//        TPZFNMatrix<9,REAL> k(3,3,0.0);
 //        Compute_Kappa(datavec[p_b], k);
 //        
-//        Solout[0] = -(k/m_eta) * (dp(0,0)*axes_p(0,0)+dp(1,0)*axes_p(1,0));
+//        REAL c = (k[0]/m_eta);
+//        
+//        Solout[0] = -(c) * (dp(0,0)*axes_p(0,0)+dp(1,0)*axes_p(1,0));
 //        return;
 //    }
 //    
 //    //	Darcy's velocity in y direction
 //    if(var == 3)
 //    {
-//        
-//        REAL k = 0.0;
+//        // Compute permeability
+//        TPZFNMatrix<9,REAL> k(3,3,0.0);
 //        Compute_Kappa(datavec[p_b], k);
 //        
-//        Solout[0] = -(k/m_eta) * (dp(0,0)*axes_p(0,1)+dp(1,0)*axes_p(1,1));
+//        REAL c = (k[0]/m_eta);
+//        
+//        Solout[0] = -(c) * (dp(0,0)*axes_p(0,1)+dp(1,0)*axes_p(1,1));
 //        return;
 //    }
     
 }
 
 /** @brief Unique identifier for serialization purposes */
-int TPZCPPDarcyMat::ClassId() const
+int TPZCPPDarcyWithMem::ClassId() const
 {
-    return Hash("TPZCPPDarcyMat") ^ TPZMaterial::ClassId() << 1;
+    return Hash("TPZCPPDarcyWithMem") ^ TPZMaterial::ClassId() << 1;
 }
 
 
 ////////////////////////////////////////////////////////////////////
-void TPZCPPDarcyMat::Write(TPZStream &buf, int withclassid) const
+void TPZCPPDarcyWithMem::Write(TPZStream &buf, int withclassid) const
 {
     TPZMaterial::Write(buf, withclassid);
 }
 
 ////////////////////////////////////////////////////////////////////
-void TPZCPPDarcyMat::Read(TPZStream &buf, void *context)
+void TPZCPPDarcyWithMem::Read(TPZStream &buf, void *context)
 {
     TPZMaterial::Read(buf, context);
 }
