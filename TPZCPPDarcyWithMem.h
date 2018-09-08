@@ -15,12 +15,12 @@
 #include "pzbndcond.h"
 #include "pzvec.h"
 #include <iostream>
-
 #include "TPZCPPDarcyMem.h"
+#include "TPZCPPDarcyMat.h"
 
 
 
-class TPZCPPDarcyWithMem: public TPZMatWithMem<TPZCPPDarcyMem, TPZDiscontinuousGalerkin >
+class TPZCPPDarcyWithMem: public TPZMatWithMem<TPZCPPDarcyMem, TPZCPPDarcyMat>
 {
     
 protected:
@@ -64,55 +64,30 @@ public:
     /** @brief compute permeability (Kappa) */
     virtual void Compute_Kappa(TPZMaterialData &data, TPZFNMatrix<9,STATE> &k);
     
-    void FillDataRequirements(TPZVec<TPZMaterialData > &datavec);
+    void FillDataRequirements(TPZMaterialData &data);
     
-    void FillBoundaryConditionDataRequirement(int type,TPZVec<TPZMaterialData > &datavec);
+    void FillBoundaryConditionDataRequirement(int type,TPZMaterialData &data);
     
     /** @brief It computes a contribution to the stiffness matrix and load vector at one integration point to simulation. */
-    void Contribute(TPZVec<TPZMaterialData> &datavec, REAL weight, TPZFMatrix<STATE> &ek, TPZFMatrix<STATE> &ef);
+    void Contribute(TPZMaterialData &data, REAL weight, TPZFMatrix<STATE> &ek, TPZFMatrix<STATE> &ef);
     
-    void ContributeBC(TPZVec<TPZMaterialData> &datavec, REAL weight, TPZFMatrix<STATE> &ek,TPZFMatrix<STATE> &ef,TPZBndCond &bc);
+    void ContributeBC(TPZMaterialData &data, REAL weight, TPZFMatrix<STATE> &ek,TPZFMatrix<STATE> &ef,TPZBndCond &bc);
     
     int VariableIndex(const std::string &name);
     
     int NSolutionVariables(int var);
     
-    virtual void Solution(TPZVec<TPZMaterialData> &datavec, int var, TPZVec<STATE> &Solout);
+    virtual void Solution(TPZMaterialData &data, int var, TPZVec<STATE> &Solout);
     
     
-    void Solution(TPZMaterialData &data, TPZVec<TPZMaterialData> &dataleftvec, TPZVec<TPZMaterialData> &datarightvec, int var, TPZVec<STATE> &Solout, TPZCompEl * Left, TPZCompEl * Right)
+    void Contribute(TPZVec<TPZMaterialData> &datavec, REAL weight, TPZFMatrix<STATE> &ek, TPZFMatrix<STATE> &ef)
     {
         DebugStop();
     }
     
-    void ContributeInterface(TPZVec<TPZMaterialData> &datavec, TPZVec<TPZMaterialData> &dataleftvec, TPZVec<TPZMaterialData> &datarightvec,
-                             REAL weight, TPZFMatrix<STATE> &ek, TPZFMatrix<STATE> &ef)
+    virtual void ContributeBC(TPZVec<TPZMaterialData> &datavec, REAL weight, TPZFMatrix<STATE> &ek, TPZFMatrix<STATE> &ef, TPZBndCond &bc)
     {
         DebugStop();
-    }
-    void ContributeInterface(TPZMaterialData &data, TPZVec<TPZMaterialData> &dataleftvec, TPZVec<TPZMaterialData> &datarightvec,
-                             REAL weight, TPZFMatrix<STATE> &ek, TPZFMatrix<STATE> &ef)
-    {
-        DebugStop();
-    }
-    
-    void ContributeInterface(TPZMaterialData &data, TPZMaterialData &dataleft, TPZMaterialData &dataright, REAL weight, TPZFMatrix<STATE> &ef)
-    {
-        DebugStop();
-    }
-    
-    void ContributeBCInterface(TPZMaterialData &data, TPZMaterialData &dataleft,
-                               REAL weight, TPZFMatrix<STATE> &ek,TPZFMatrix<STATE> &ef,TPZBndCond &bc)
-    {
-        DebugStop();
-    }
-    
-    void Contribute(TPZMaterialData &data, REAL weight, TPZFMatrix<STATE> &ek, TPZFMatrix<STATE> &ef)
-    {
-    }
-    
-    virtual void ContributeBC(TPZMaterialData &data, REAL weight, TPZFMatrix<STATE> &ek, TPZFMatrix<STATE> &ef, TPZBndCond &bc)
-    {
     }
 
     /** @{

@@ -9,10 +9,11 @@
 #include "pzanalysis.h"
 #include "pzbndcond.h"
 
+#include "TPZGmshReader.h"
+
 
 #include "TPZCPPDarcyMat.h"
 #include "TPZCPPDarcyWithMem.h"
-
 
 #include "pzskylstrmatrix.h"
 #include "pzstepsolver.h"
@@ -25,31 +26,34 @@ using namespace std;
 //---------------------------------Model-------------------------------------
 
 // Define Geometry
-const int dim        =  2;
-int      pOrder      =  2;
-int     h_level      =  8;
-double    lx         =  1.0;
-double    ly         =  1.0;
-int      nelx        =  h_level;
-int      nely        =  h_level;
-int       nx         =  nelx + 1;
-int       ny         =  nely + 1;
+const int  dim            =  2;
+int       pOrder          =  2;
+int      h_level          =  8;
+double     lx             =  1.0;
+double     ly             =  1.0;
+int       nelx            =  h_level;
+int       nely            =  h_level;
+int        nx             =  nelx + 1;
+int        ny             =  nely + 1;
 
 // Define id for a material (weak formulation)
-int     matid        =  1;
-int m_matBCbott      = -1;
-int m_matBCtop       = -2;
-int m_matBCleft      = -3;
-int m_matBCright     = -4;
-int m_matPoint       = -5;
+int     matid             =  1;
+int     m_matBCbott       = -1;
+int     m_matBCtop        = -2;
+int     m_matBCleft       = -3;
+int     m_matBCright      = -4;
+int     m_matPoint        = -5;
 
 // Define Boundary condition
-const int dirichlet  =  0;
-//const int neumann    =  1;
+const int dirichlet       =  0;
+//const int neumann         =  1;
 
 // Define post processing resolution
 int postProcessResolution = 0;
 
+// @brief Function to create the geometric mesh
+TPZGeoMesh * ReadGeometry();
+void PrintGeometry(TPZGeoMesh * gmesh);
 
 // @brief Function to create the geometric mesh
 TPZGeoMesh *CreateGMesh(int nelx, int nely, double hx, double hy);
@@ -57,63 +61,32 @@ TPZGeoMesh *CreateGMesh(int nelx, int nely, double hx, double hy);
 // @brief Function to create  the computational mesh
 TPZCompMesh *CMesh(TPZGeoMesh *gmesh, int pOrder);
 
+// @brief Function of analysis
+TPZAnalysis * Analysis(TPZCompMesh * cmesh);
+
+// Post-process utilities
+void PostProcess(TPZAnalysis *an);
 
 
 
 // Main function of the program:
-int main(int argc, char *argv[])
+int main()
 {
     
     TPZGeoMesh *gmesh = CreateGMesh(nx, ny, lx, ly); // Function to create geometry
     
     TPZCompMesh *cmesh = CMesh(gmesh, pOrder); // Function to create polynomial mesh
 
-    // Solving the System
-    int numthreads = 0;
-    bool optimizeBandwidth = false;
-    TPZAnalysis analysis(cmesh, optimizeBandwidth); // Creates object of analysis
+    TPZAnalysis * analysis = Analysis(cmesh);
     
-    
-    TPZSkylineStructMatrix struct_mat(cmesh);
-    struct_mat.SetNumThreads(numthreads);
-    TPZStepSolver<STATE> step;
-    step.SetDirect(ELDLt);
-    analysis.SetSolver(step);
-    analysis.SetStructuralMatrix(struct_mat);
+    analysis->Assemble();
+    analysis->Solve();
 
-    
-    std::cout << "Assemble matrix with NDoF = " << cmesh->NEquations() << std::endl;
-    analysis.Assemble(); // Assembla the global matrix
-    
-#ifdef PZDEBUG
-    std::ofstream filestiff("stiffness.txt");
-    analysis.Solver().Matrix()->Print("K = ",filestiff,EMathematicaInput);
-#endif
-
-    std::cout << "Solving Matrix " << std::endl;
-    analysis.Solve();
-    
-#ifdef PZDEBUG
-        std::ofstream file("file.txt");
-        analysis.Solution().Print("sol=",file,EMathematicaInput);
-#endif
-
-    
-    // Post processing for paraview   
-    std::cout << " Post Processing " << std::endl;
-    std::string plotfile("DarcyModel.vtk");
-    TPZStack<std::string> scalnames, vecnames;
-    scalnames.Push("p");
-    scalnames.Push("k");
-//    scalnames.Push("vx");
-//    scalnames.Push("vy");
-    
-    analysis.DefineGraphMesh(dim, scalnames, vecnames, plotfile); // Define graphic mesh
-    analysis.PostProcess(postProcessResolution,dim); // Perform post processing
-    
-    std::cout << "FINISHED!" << std::endl;
-    
+    PostProcess(analysis);
+    std::cout << "Execution complete." << std::endl;
     return 0;
+    
+    
 }
 
 
@@ -150,7 +123,6 @@ TPZGeoMesh *CreateGMesh(int nx, int ny, double lx, double ly)
     pointtopology[0] = 0;
     
     gmesh->CreateGeoElement(EPoint,pointtopology,m_matPoint,id);
-    
     
     // Auxiliary vector to store the connections between elements:
     TPZVec <int64_t> connect(4,0);
@@ -284,6 +256,37 @@ TPZGeoMesh *CreateGMesh(int nx, int ny, double lx, double ly)
     return gmesh;
 }
 
+
+// Create read geometry
+TPZGeoMesh * ReadGeometry()
+{
+    TPZGeoMesh * gmesh = new TPZGeoMesh;
+    std::string grid("sample_test.msh");
+    
+    TPZGmshReader Geometry;
+    REAL s = 1.0;
+    Geometry.SetfDimensionlessL(s);
+    gmesh = Geometry.GeometricGmshMesh(grid);
+    const std::string name("Sample of test");
+    gmesh->SetName(name);
+    
+    return gmesh;
+}
+
+// Create print geometry
+void PrintGeometry(TPZGeoMesh * gmesh)
+{
+    std::stringstream text_name;
+    std::stringstream vtk_name;
+    text_name   << "geometry" << ".txt";
+    vtk_name    << "geometry" << ".vtk";
+    std::ofstream textfile(text_name.str().c_str());
+    gmesh->Print(textfile);
+    std::ofstream vtkfile(vtk_name.str().c_str());
+    TPZVTKGeoMesh::PrintGMeshVTK(gmesh, vtkfile, true);
+}
+
+
 // Create Computational mesh
 TPZCompMesh *CMesh(TPZGeoMesh *gmesh, int pOrder)
 {
@@ -302,11 +305,11 @@ TPZCompMesh *CMesh(TPZGeoMesh *gmesh, int pOrder)
     // *************** TPZCPPDarcyMat ******************************************************************************
     
     
-//    TPZCPPDarcyMat * material = new TPZCPPDarcyMat(matid);
+    TPZCPPDarcyMat * material = new TPZCPPDarcyMat(matid);
     
     // *************** TPZCPPDarcyWithMem **************************************************************************
 
-    TPZCPPDarcyWithMem * material = new TPZCPPDarcyWithMem(matid, dim);
+//    TPZCPPDarcyWithMem * material = new TPZCPPDarcyWithMem(matid, dim);
     
     // *************** End of checking the type of material ********************************************************
 
@@ -338,4 +341,32 @@ TPZCompMesh *CMesh(TPZGeoMesh *gmesh, int pOrder)
     
     return cmesh;
     
+}
+
+
+TPZAnalysis * Analysis(TPZCompMesh * cmesh)
+{
+    int numthreads = 0;
+    TPZAnalysis * analysis = new TPZAnalysis(cmesh,true);
+    TPZSkylineStructMatrix matrix(cmesh);
+    //    TPZSymetricSpStructMatrix matrix(cmesh);
+    TPZStepSolver<STATE> step;
+    step.SetDirect(ELDLt);
+    matrix.SetNumThreads(numthreads);
+    analysis->SetStructuralMatrix(matrix);
+    analysis->SetSolver(step);
+    return analysis;
+}
+
+void PostProcess(TPZAnalysis *an)
+{
+    const int dim = an->Mesh()->Dimension();
+    TPZStack<std::string> scalnames, vecnames;
+    std::string plotfile = "DarcyModel.vtk";
+    
+    scalnames.Push("p");
+    scalnames.Push("k");
+//    vecnames.Push("Displacement");
+    an->DefineGraphMesh(dim, scalnames, vecnames, plotfile);
+    an->PostProcess(postProcessResolution);
 }

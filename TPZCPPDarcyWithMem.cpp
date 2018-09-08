@@ -27,7 +27,7 @@ static LoggerPtr logger(Logger::getLogger("pz.TPZCPPDarcyWithMem"));
 
 
 /** @brief default costructor */
-TPZCPPDarcyWithMem::TPZCPPDarcyWithMem(): TPZMatWithMem<TPZCPPDarcyMem, TPZDiscontinuousGalerkin>()
+TPZCPPDarcyWithMem::TPZCPPDarcyWithMem(): TPZMatWithMem<TPZCPPDarcyMem, TPZCPPDarcyMat>()
 {
     m_Dim = 0;
     m_k_0 = 0;
@@ -35,7 +35,7 @@ TPZCPPDarcyWithMem::TPZCPPDarcyWithMem(): TPZMatWithMem<TPZCPPDarcyMem, TPZDisco
 }
 
 /** @brief costructor based on a material id */
-TPZCPPDarcyWithMem::TPZCPPDarcyWithMem(int matid, int dim): TPZMatWithMem<TPZCPPDarcyMem, TPZDiscontinuousGalerkin>(matid)
+TPZCPPDarcyWithMem::TPZCPPDarcyWithMem(int matid, int dim): TPZMatWithMem<TPZCPPDarcyMem, TPZCPPDarcyMat>(matid)
 {
     m_Dim = dim;
     m_k_0 = 1.0;
@@ -43,7 +43,7 @@ TPZCPPDarcyWithMem::TPZCPPDarcyWithMem(int matid, int dim): TPZMatWithMem<TPZCPP
 }
 
 /** @brief copy constructor $ */
-TPZCPPDarcyWithMem::TPZCPPDarcyWithMem(const TPZCPPDarcyWithMem& other): TPZMatWithMem<TPZCPPDarcyMem, TPZDiscontinuousGalerkin>(other)
+TPZCPPDarcyWithMem::TPZCPPDarcyWithMem(const TPZCPPDarcyWithMem& other): TPZMatWithMem<TPZCPPDarcyMem, TPZCPPDarcyMat>(other)
 {
     m_Dim  = other.m_Dim;
     m_k_0  = other.m_k_0;
@@ -75,25 +75,24 @@ void TPZCPPDarcyWithMem::Compute_Kappa(TPZMaterialData &data, TPZFNMatrix<9,STAT
     long global_point_index = data.intGlobPtIndex;
     TPZCPPDarcyMem &memory = GetMemory()[global_point_index];
     
-    k = memory.kappa_n();
+    k = memory.kappa();
 }
 
 
 /** @brief of contribute in 2 dimensional */
-void TPZCPPDarcyWithMem::Contribute(TPZVec<TPZMaterialData> &datavec, REAL weight, TPZFMatrix<STATE>  &ek, TPZFMatrix<STATE> &ef)
+void TPZCPPDarcyWithMem::Contribute(TPZMaterialData &data, REAL weight, TPZFMatrix<STATE>  &ek, TPZFMatrix<STATE> &ef)
 {
-    int p_b = 0;
     m_k_0 = 1.0;
     m_eta = 1.0;
     
     // Getting the space functions
-    TPZFMatrix<REAL>        &phip         =   datavec[p_b].phi;
-    TPZFMatrix<REAL>        &grad_phi_p   =   datavec[p_b].dphix;
-    TPZFNMatrix <9,REAL>    &axes_p	      =	  datavec[p_b].axes;
+    TPZFMatrix<REAL>        &phip         =   data.phi;
+    TPZFMatrix<REAL>        &grad_phi_p   =   data.dphix;
+    TPZFNMatrix <9,REAL>    &axes_p	      =	  data.axes;
     
     // Getting the solutions and derivatives
-    TPZManVector<REAL,1> p = datavec[p_b].sol[0];
-    TPZFNMatrix <6,REAL> dp = datavec[p_b].dsol[0];
+    TPZManVector<REAL,1> p = data.sol[0];
+    TPZFNMatrix <6,REAL> dp = data.dsol[0];
     
     TPZFNMatrix<6,REAL> Grad_p(2,1,0.0),Grad_phi_i(2,1,0.0),Grad_phi_j(2,1,0.0);
     Grad_p(0,0) = dp(0,0)*axes_p(0,0)+dp(1,0)*axes_p(1,0);
@@ -103,7 +102,7 @@ void TPZCPPDarcyWithMem::Contribute(TPZVec<TPZMaterialData> &datavec, REAL weigh
     
     // Compute permeability
     TPZFNMatrix<9,REAL> k(3,3,0.0);
-    Compute_Kappa(datavec[p_b], k);
+    Compute_Kappa(data, k);
     
     REAL c = (k[0]/m_eta);
 
@@ -141,12 +140,11 @@ void TPZCPPDarcyWithMem::Contribute(TPZVec<TPZMaterialData> &datavec, REAL weigh
 
 
 /** @brief of contribute of BC_2D */
-void TPZCPPDarcyWithMem::ContributeBC(TPZVec<TPZMaterialData> &datavec, REAL weight, TPZFMatrix<STATE> &ek,TPZFMatrix<STATE> &ef,TPZBndCond &bc)
+void TPZCPPDarcyWithMem::ContributeBC(TPZMaterialData &data, REAL weight, TPZFMatrix<STATE> &ek,TPZFMatrix<STATE> &ef,TPZBndCond &bc)
 {
-    int p_b = 0;
 
-    TPZFMatrix<REAL>  &phip = datavec[p_b].phi;
-    TPZManVector<REAL,1> p  = datavec[p_b].sol[0];
+    TPZFMatrix<REAL>  &phip = data.phi;
+    TPZManVector<REAL,1> p  = data.sol[0];
 
     int phrp = phip.Rows();
     short in,jn;
@@ -204,27 +202,17 @@ void TPZCPPDarcyWithMem::ContributeBC(TPZVec<TPZMaterialData> &datavec, REAL wei
 
 
 /** Returns the Fill Data Requirement */
-void TPZCPPDarcyWithMem::FillDataRequirements(TPZVec<TPZMaterialData> &datavec)
+void TPZCPPDarcyWithMem::FillDataRequirements(TPZMaterialData &data)
 
 {
-    int nref = datavec.size();
-    for(int i = 0; i<nref; i++)
-    {
-        datavec[i].SetAllRequirements(false);
-        datavec[i].fNeedsSol = true;
-    }
+    data.SetAllRequirements(false);
 }
 
 
 /** Returns the Fill Boundary Condition Data Requirement */
-void TPZCPPDarcyWithMem::FillBoundaryConditionDataRequirement(int type,TPZVec<TPZMaterialData> &datavec)
+void TPZCPPDarcyWithMem::FillBoundaryConditionDataRequirement(int type,TPZMaterialData &data)
 {
-    int nref = datavec.size();
-    for(int i = 0; i<nref; i++)
-    {
-        datavec[i].SetAllRequirements(false);
-        datavec[i].fNeedsSol = true;
-    }
+    data.SetAllRequirements(false);
 }
 
 
@@ -264,11 +252,10 @@ int TPZCPPDarcyWithMem::NSolutionVariables(int var)
 
 
 //	Calculate Secondary variables based on ux, uy, Pore pressure and their derivatives
-void TPZCPPDarcyWithMem::Solution(TPZVec<TPZMaterialData> &datavec, int var, TPZVec<STATE> &Solout)
+void TPZCPPDarcyWithMem::Solution(TPZMaterialData &data, int var, TPZVec<STATE> &Solout)
 {
     Solout.Resize( this->NSolutionVariables(var));
     
-    int p_b = 0;
     m_k_0 = 1.0;
     m_eta = 1.0;
     
@@ -276,14 +263,14 @@ void TPZCPPDarcyWithMem::Solution(TPZVec<TPZMaterialData> &datavec, int var, TPZ
     REAL to_Darcy   = 1; // 1.01327e+12;
     
     // Getting the solutions and derivatives
-    TPZManVector<REAL,1> p  = datavec[p_b].sol[0];
-    TPZFNMatrix <9,REAL> dp = datavec[p_b].dsol[0];
+    TPZManVector<REAL,1> p  = data.sol[0];
+    TPZFNMatrix <9,REAL> dp = data.dsol[0];
     p.Print(std::cout);
     dp.Print(std::cout);
 
     
     // Getting the space functions
-    TPZFNMatrix <9,REAL>	&axes_p	=	datavec[p_b].axes;
+    TPZFNMatrix <9,REAL>	&axes_p	=	data.axes;
     
     // Computing Gradient of the Solution
     TPZFNMatrix<3,REAL> Grad_p(3,1,0.0);
@@ -303,7 +290,7 @@ void TPZCPPDarcyWithMem::Solution(TPZVec<TPZMaterialData> &datavec, int var, TPZ
     {
         // Compute permeability
         TPZFNMatrix<9,REAL> k(3,3,0.0);
-        Compute_Kappa(datavec[p_b], k);
+        Compute_Kappa(data, k);
         
         Solout[0] = k[0]*to_Darcy;
         return;
@@ -316,7 +303,7 @@ void TPZCPPDarcyWithMem::Solution(TPZVec<TPZMaterialData> &datavec, int var, TPZ
 //        
 //        // Compute permeability
 //        TPZFNMatrix<9,REAL> k(3,3,0.0);
-//        Compute_Kappa(datavec[p_b], k);
+//        Compute_Kappa(data, k);
 //        
 //        REAL c = (k[0]/m_eta);
 //        
@@ -329,7 +316,7 @@ void TPZCPPDarcyWithMem::Solution(TPZVec<TPZMaterialData> &datavec, int var, TPZ
 //    {
 //        // Compute permeability
 //        TPZFNMatrix<9,REAL> k(3,3,0.0);
-//        Compute_Kappa(datavec[p_b], k);
+//        Compute_Kappa(data, k);
 //        
 //        REAL c = (k[0]/m_eta);
 //        

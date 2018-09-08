@@ -21,13 +21,13 @@ class TPZCPPDarcyMem
 {
     
     /// @brief of Pore Pressure
-    STATE m_PorePressure_n;
+    STATE m_PorePressure;
     
     /// @brief of Gradient of Pore Pressure
-    TPZFMatrix<REAL> m_GradPorePressure_n;
+    TPZFMatrix<REAL> m_GradPorePressure;
     
     /// @brief of Absolute Permeability
-    TPZFNMatrix<9,REAL>  m_kappa_n;
+    TPZFNMatrix<9,REAL>  m_kappa;
     
     
 public:
@@ -70,45 +70,43 @@ public:
 public:
 
     
-    /** @brief Set Pore Pressure at n (last) state */
-    void Set_porePressure_n(STATE & pore_pressure_n)
+    /** @brief Set Pore Pressure */
+    void Set_porePressure(STATE & pore_pressure)
     {
-        m_PorePressure_n = pore_pressure_n;
+        m_PorePressure = pore_pressure;
     }
     
-    /** @brief Get Pore Pressure at n (last) state */
-    STATE & pore_pressure_n()
+    /** @brief Get Pore Pressure */
+    STATE & pore_pressure()
     {
-        return m_PorePressure_n;
-    }
-    
-    
-    /** @brief Set Gradient of Pore Pressure at n (last) state */
-    void Set_gradporepressure_n(TPZFMatrix<REAL> & grad_pore_pressure_n)
-    {
-        m_GradPorePressure_n = grad_pore_pressure_n;
-    }
-    
-    /** @brief Get Gradient of Pore Pressure at n (last) state */
-    TPZFMatrix<REAL> grad_pore_pressure_n()
-    {
-        return m_GradPorePressure_n;
+        return m_PorePressure;
     }
     
     
-    /** @brief Set Absolute Permeability at n (last) state */
-    void Set_kappa_n(TPZFMatrix<REAL> & kappa_n)
+    /** @brief Set Gradient of Pore Pressure */
+    void Set_gradporepressure(TPZFMatrix<REAL> & grad_pore_pressure)
     {
-        m_kappa_n = kappa_n;
+        m_GradPorePressure = grad_pore_pressure;
     }
     
-    /** @brief Get Absolute Permeability at n (last) state */
-    TPZFMatrix<REAL> kappa_n()
+    /** @brief Get Gradient of Pore Pressure */
+    TPZFMatrix<REAL> grad_pore_pressure()
     {
-        return m_kappa_n;
+        return m_GradPorePressure;
     }
     
     
+    /** @brief Set Absolute Permeability */
+    void Set_kappa_n(TPZFMatrix<REAL> & kappa)
+    {
+        m_kappa = kappa;
+    }
+    
+    /** @brief Get Absolute Permeability */
+    TPZFMatrix<REAL> kappa()
+    {
+        return m_kappa;
+    }
     
     
 };

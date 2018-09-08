@@ -76,30 +76,31 @@ void TPZCPPDarcyMat::Compute_Kappa(TPZMaterialData &data, REAL &kappa)
 
 
 /** @brief of contribute in 2 dimensional */
-void TPZCPPDarcyMat::Contribute(TPZVec<TPZMaterialData> &datavec, REAL weight, TPZFMatrix<STATE>  &ek, TPZFMatrix<STATE> &ef)
+void TPZCPPDarcyMat::Contribute(TPZMaterialData &data, REAL weight, TPZFMatrix<STATE>  &ek, TPZFMatrix<STATE> &ef)
 {
-    int p_b = 0;
     m_k_0 = 1.0;
     m_eta = 1.0;
     
     // Getting the space functions
-    TPZFMatrix<REAL>        &phip         =   datavec[p_b].phi;
-    TPZFMatrix<REAL>        &grad_phi_p   =   datavec[p_b].dphix;
-    TPZFNMatrix <9,REAL>    &axes_p	      =	  datavec[p_b].axes;
+    TPZFMatrix<REAL>        &phip         =   data.phi;
+    TPZFMatrix<REAL>        &grad_phi_p   =   data.dphix;
+    TPZFNMatrix <9,REAL>    &axes_p	      =	  data.axes;
+    
+    int nphi_p = phip.Rows();
+
     
     // Getting the solutions and derivatives
-    TPZManVector<REAL,1> p = datavec[p_b].sol[0];
-    TPZFNMatrix <6,REAL> dp = datavec[p_b].dsol[0];
+    TPZManVector<REAL,1> p = data.sol[0];
+    TPZFNMatrix <6,REAL> dp = data.dsol[0];
     
     TPZFNMatrix<6,REAL> Grad_p(2,1,0.0),Grad_phi_i(2,1,0.0),Grad_phi_j(2,1,0.0);
     Grad_p(0,0) = dp(0,0)*axes_p(0,0)+dp(1,0)*axes_p(1,0);
     Grad_p(1,0) = dp(0,0)*axes_p(0,1)+dp(1,0)*axes_p(1,1);
     
-    int nphi_p = phip.Rows();
     
     // Compute permeability
     REAL k = 0.0;
-    Compute_Kappa(datavec[p_b], k);
+    Compute_Kappa(data, k);
     
     REAL c = (k/m_eta);
 
@@ -137,12 +138,11 @@ void TPZCPPDarcyMat::Contribute(TPZVec<TPZMaterialData> &datavec, REAL weight, T
 
 
 /** @brief of contribute of BC_2D */
-void TPZCPPDarcyMat::ContributeBC(TPZVec<TPZMaterialData> &datavec, REAL weight, TPZFMatrix<STATE> &ek,TPZFMatrix<STATE> &ef,TPZBndCond &bc)
+void TPZCPPDarcyMat::ContributeBC(TPZMaterialData &data, REAL weight, TPZFMatrix<STATE> &ek,TPZFMatrix<STATE> &ef,TPZBndCond &bc)
 {
-    int p_b = 0;
 
-    TPZFMatrix<REAL>  &phip = datavec[p_b].phi;
-    TPZManVector<REAL,1> p  = datavec[p_b].sol[0];
+    TPZFMatrix<REAL>  &phip = data.phi;
+    TPZManVector<REAL,1> p  = data.sol[0];
 
     int phrp = phip.Rows();
     short in,jn;
@@ -200,27 +200,17 @@ void TPZCPPDarcyMat::ContributeBC(TPZVec<TPZMaterialData> &datavec, REAL weight,
 
 
 /** Returns the Fill Data Requirement */
-void TPZCPPDarcyMat::FillDataRequirements(TPZVec<TPZMaterialData> &datavec)
+void TPZCPPDarcyMat::FillDataRequirements(TPZMaterialData &data)
 
 {
-    int nref = datavec.size();
-    for(int i = 0; i<nref; i++)
-    {
-        datavec[i].SetAllRequirements(false);
-        datavec[i].fNeedsSol = true;
-    }
+    data.SetAllRequirements(false);
 }
 
 
 /** Returns the Fill Boundary Condition Data Requirement */
-void TPZCPPDarcyMat::FillBoundaryConditionDataRequirement(int type,TPZVec<TPZMaterialData> &datavec)
+void TPZCPPDarcyMat::FillBoundaryConditionDataRequirement(int type,TPZMaterialData &data)
 {
-    int nref = datavec.size();
-    for(int i = 0; i<nref; i++)
-    {
-        datavec[i].SetAllRequirements(false);
-        datavec[i].fNeedsSol = true;
-    }
+    data.SetAllRequirements(false);
 }
 
 
@@ -260,11 +250,10 @@ int TPZCPPDarcyMat::NSolutionVariables(int var)
 
 
 //	Calculate Secondary variables based on ux, uy, Pore pressure and their derivatives
-void TPZCPPDarcyMat::Solution(TPZVec<TPZMaterialData> &datavec, int var, TPZVec<STATE> &Solout)
+void TPZCPPDarcyMat::Solution(TPZMaterialData &data, int var, TPZVec<STATE> &Solout)
 {
     Solout.Resize( this->NSolutionVariables(var));
     
-    int p_b = 0;
     m_k_0 = 1.0;
     m_eta = 1.0;
     
@@ -272,14 +261,14 @@ void TPZCPPDarcyMat::Solution(TPZVec<TPZMaterialData> &datavec, int var, TPZVec<
     REAL to_Darcy   = 1; // 1.01327e+12;
     
     // Getting the solutions and derivatives
-    TPZManVector<REAL,1> p  = datavec[p_b].sol[0];
-    TPZFNMatrix <9,REAL> dp = datavec[p_b].dsol[0];
+    TPZManVector<REAL,1> p  = data.sol[0];
+    TPZFNMatrix <9,REAL> dp = data.dsol[0];
     p.Print(std::cout);
     dp.Print(std::cout);
 
     
     // Getting the space functions
-    TPZFNMatrix <9,REAL>	&axes_p	=	datavec[p_b].axes;
+    TPZFNMatrix <9,REAL>	&axes_p	=	data.axes;
     
     // Computing Gradient of the Solution
     TPZFNMatrix<3,REAL> Grad_p(3,1,0.0);
@@ -298,7 +287,7 @@ void TPZCPPDarcyMat::Solution(TPZVec<TPZMaterialData> &datavec, int var, TPZVec<
     if(var == 1)
     {
         REAL k = 0.0;
-        Compute_Kappa(datavec[p_b], k);
+        Compute_Kappa(data, k);
         Solout[0] = k*to_Darcy;
         return;
     }
@@ -309,7 +298,7 @@ void TPZCPPDarcyMat::Solution(TPZVec<TPZMaterialData> &datavec, int var, TPZVec<
 //    {
 //        
 //        REAL k = 0.0;
-//        Compute_Kappa(datavec[p_b], k);
+//        Compute_Kappa(data, k);
 //        
 //        Solout[0] = -(k/m_eta) * (dp(0,0)*axes_p(0,0)+dp(1,0)*axes_p(1,0));
 //        return;
@@ -320,7 +309,7 @@ void TPZCPPDarcyMat::Solution(TPZVec<TPZMaterialData> &datavec, int var, TPZVec<
 //    {
 //        
 //        REAL k = 0.0;
-//        Compute_Kappa(datavec[p_b], k);
+//        Compute_Kappa(data, k);
 //        
 //        Solout[0] = -(k/m_eta) * (dp(0,0)*axes_p(0,1)+dp(1,0)*axes_p(1,1));
 //        return;

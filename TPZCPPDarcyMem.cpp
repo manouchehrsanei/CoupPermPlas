@@ -13,16 +13,16 @@
 
 TPZCPPDarcyMem::TPZCPPDarcyMem()
 {
-     /** @brief Pore Pressure at n (last) state */
-    m_PorePressure_n    = 0;
+     /** @brief Pore Pressure */
+    m_PorePressure    = 0;
     
-    /** @brief Gradient of Pore Pressure at n (last) state */
-    m_GradPorePressure_n.Resize(3, 3);
-    m_GradPorePressure_n.Zero();
+    /** @brief Gradient of Pore Pressure */
+    m_GradPorePressure.Resize(3, 3);
+    m_GradPorePressure.Zero();
     
-     /** @brief Permeability at n (last) state */
-    m_kappa_n.Resize(3, 3);
-    m_kappa_n.Zero();
+     /** @brief Permeability */
+    m_kappa.Resize(3, 3);
+    m_kappa.Zero();
 }
 
 /// Copy constructor
@@ -30,9 +30,9 @@ TPZCPPDarcyMem::TPZCPPDarcyMem(const TPZCPPDarcyMem & other)
 {
     if(&other != this)
     {
-        m_PorePressure_n       = other.m_PorePressure_n;
-        m_GradPorePressure_n   = other.m_GradPorePressure_n;
-        m_kappa_n              = other.m_kappa_n;
+        m_PorePressure       = other.m_PorePressure;
+        m_GradPorePressure   = other.m_GradPorePressure;
+        m_kappa              = other.m_kappa;
     }
 }
 
@@ -44,9 +44,9 @@ const TPZCPPDarcyMem & TPZCPPDarcyMem::operator=(const TPZCPPDarcyMem & other)
     {
         return *this;
     }
-    m_PorePressure_n       = other.m_PorePressure_n;
-    m_GradPorePressure_n   = other.m_GradPorePressure_n;
-    m_kappa_n              = other.m_kappa_n;
+    m_PorePressure       = other.m_PorePressure;
+    m_GradPorePressure   = other.m_GradPorePressure;
+    m_kappa              = other.m_kappa;
     return *this;
 }
 
@@ -65,14 +65,14 @@ const std::string TPZCPPDarcyMem::Name()const
 /// Write class attributes
 void TPZCPPDarcyMem::Write(TPZStream &buf, int withclassid) const
 {
-    buf.Write(&m_PorePressure_n);
+    buf.Write(&m_PorePressure);
 
 }
 
 /// Read class attributes
 void TPZCPPDarcyMem::Read(TPZStream &buf, void *context)
 {
-    buf.Read(&m_PorePressure_n);
+    buf.Read(&m_PorePressure);
 
 }
 
@@ -80,9 +80,9 @@ void TPZCPPDarcyMem::Read(TPZStream &buf, void *context)
 void TPZCPPDarcyMem::Print(std::ostream &out) const
 {
     out << Name();
-    out << "\n Pore Pressure             = " << m_PorePressure_n;
-    out << "\n Gradient of Pore Pressure = " << m_GradPorePressure_n;
-    out << "\n Absolute Permeability     = " << m_kappa_n;
+    out << "\n Pore Pressure             = " << m_PorePressure;
+    out << "\n Gradient of Pore Pressure = " << m_GradPorePressure;
+    out << "\n Absolute Permeability     = " << m_kappa;
 }
 
 
